@@ -1,0 +1,5 @@
+# for Android, Eclipse
+bin/*
+gen/*
+local.properties
+.classpath
