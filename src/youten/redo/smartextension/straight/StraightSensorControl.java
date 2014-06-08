@@ -88,8 +88,8 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         public void onSensorEvent(AccessorySensorEvent sensorEvent) {
             // Log.d(StraightExtensionService.LOG_TAG, "Listener: OnSensorEvent");
             mExtensionMotion.pushEvent(sensorEvent);
-            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので10回に1回だけ書く
-            if ((mCount++) % 10 == 0) {
+            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので5回に1回だけ書く
+            if ((mCount++) % 5 == 0) {
                 updateCurrentDisplay(sensorEvent);
             }
         }
