@@ -32,6 +32,11 @@
 
 package youten.redo.smartextension.straight;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import youten.redo.smartextension.straight.sensor.ExtensionMotion;
+import youten.redo.smartextension.straight.sensor.ExtensionMotion.MotionListener;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -59,21 +64,21 @@ import com.sonyericsson.extras.liveware.extension.util.sensor.AccessorySensorEve
 import com.sonyericsson.extras.liveware.extension.util.sensor.AccessorySensorException;
 import com.sonyericsson.extras.liveware.extension.util.sensor.AccessorySensorManager;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * The sample sensor control handles the accelerometer sensor on an accessory.
- * This class exists in one instance for every supported host application that
- * we have registered to
+ * The sample sensor control handles the accelerometer sensor on an accessory. This class exists in one instance for
+ * every supported host application that we have registered to
  */
-class StraightSensorControl extends ControlExtension {
+class StraightSensorControl extends ControlExtension implements MotionListener {
 
     private static final Bitmap.Config BITMAP_CONFIG = Bitmap.Config.RGB_565;
 
     private int mWidth = 220;
     private int mHeight = 176;
     private int mCurrentSensor = 0;
+    private int mCount = 0;
+    private String mPosition = ExtensionMotion.POSITION_UNKNOWN;
+
+    private ExtensionMotion mExtensionMotion = new ExtensionMotion(this);
 
     private List<AccessorySensor> mSensors = new ArrayList<AccessorySensor>();
 
@@ -81,9 +86,22 @@ class StraightSensorControl extends ControlExtension {
 
         @Override
         public void onSensorEvent(AccessorySensorEvent sensorEvent) {
-            Log.d(StraightExtensionService.LOG_TAG, "Listener: OnSensorEvent");
-            updateCurrentDisplay(sensorEvent);
+            // Log.d(StraightExtensionService.LOG_TAG, "Listener: OnSensorEvent");
+            mExtensionMotion.pushEvent(sensorEvent);
+            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので10回に1回だけ書く
+            if ((mCount++) % 10 == 0) {
+                updateCurrentDisplay(sensorEvent);
+            }
         }
+
+    };
+
+    public void onPositionChanged(String fromPosition, String toPosition) {
+        Log.d(StraightExtensionService.LOG_TAG, "Position " + fromPosition + " -> " + toPosition);
+        mPosition = toPosition;
+    };
+
+    public void onSeiken(float score) {
 
     };
 
@@ -100,15 +118,18 @@ class StraightSensorControl extends ControlExtension {
         // Add accelerometer, if supported
         if (DeviceInfoHelper.isSensorSupported(context, hostAppPackageName,
                 SensorTypeValue.ACCELEROMETER)) {
+            Log.d(StraightExtensionService.LOG_TAG, "ACCELEROMETER supported");
             mSensors.add(manager.getSensor(SensorTypeValue.ACCELEROMETER));
         }
         // Add magnetic field sensor, if supported
         if (DeviceInfoHelper.isSensorSupported(context, hostAppPackageName,
                 SensorTypeValue.MAGNETIC_FIELD)) {
+            Log.d(StraightExtensionService.LOG_TAG, "MAGNETIC_FIELD supported");
             mSensors.add(manager.getSensor(SensorTypeValue.MAGNETIC_FIELD));
         }
         // Add light sensor, if supported
         if (DeviceInfoHelper.isSensorSupported(context, hostAppPackageName, SensorTypeValue.LIGHT)) {
+            Log.d(StraightExtensionService.LOG_TAG, "LIGHT supported");
             mSensors.add(manager.getSensor(SensorTypeValue.LIGHT));
         }
 
@@ -287,6 +308,9 @@ class StraightSensorControl extends ControlExtension {
 
         TextView title = (TextView) sampleLayout.findViewById(R.id.sensor_title);
         title.setText(sensorType);
+
+        TextView position = (TextView) sampleLayout.findViewById(R.id.position);
+        position.setText(mPosition);
 
         // Update the values.
         if (sensorEvent != null) {
