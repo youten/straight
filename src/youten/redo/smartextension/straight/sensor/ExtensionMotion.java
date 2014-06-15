@@ -1,9 +1,6 @@
 
 package youten.redo.smartextension.straight.sensor;
 
-import youten.redo.smartextension.straight.StraightExtensionService;
-import android.util.Log;
-
 import com.sonyericsson.extras.liveware.extension.util.sensor.AccessorySensorEvent;
 
 public class ExtensionMotion {
@@ -22,14 +19,20 @@ public class ExtensionMotion {
     };
 
     // xyzの絶対値のいずれかの絶対値がこの値を超えている
-    private static final float POSITION_IN_BORDER = 9.0f;
+    private static final float POSITION_IN_BORDER = 8.0f;
     // xyzの絶対値の合計値がこの値を下回ったら（落下方向に）に移動中
-    private static final float MOVEMENT_SUM_MIN = 9.0f;
+    private static final float MOVEMENT_SUM_MIN = 8.0f;
     // xyzの絶対値の合計値がこの値を上回ったら（他の向きに）に移動中
-    private static final float MOVEMENT_SUM_MAX = 12.0f;
+    private static final float MOVEMENT_SUM_MAX = 11.0f;
     private float[] mNowXYZ = new float[3];
     private String mPosition = POSITION_UNKNOWN;
     private MotionListener mListener = null;
+
+    // SEIKENスコア用X軸最低/最大スコア
+    private float mMinX = 0.0f;
+    private float mMaxX = 0.0f;
+    private long mSeikenStartTime = 0; // 正拳開始時刻。0は正拳中ではない。
+    private static final long MAX_SEIKEN_TIME_MS = 3000; //
 
     public ExtensionMotion(MotionListener listener) {
         mNowXYZ[0] = 0.0f;
@@ -77,6 +80,20 @@ public class ExtensionMotion {
             moving = true;
         }
 
+        // 正拳スコア更新
+        if (mSeikenStartTime > 0) {
+            if (mNowXYZ[0] < mMinX) {
+                mMinX = mNowXYZ[0];
+            }
+            if (mMaxX < mNowXYZ[0]) {
+                mMaxX = mNowXYZ[0];
+            }
+            long now = System.currentTimeMillis();
+            if (MAX_SEIKEN_TIME_MS < (mSeikenStartTime - now)) {
+                mSeikenStartTime = 0;
+            }
+        }
+
         String newPosition = POSITION_UNKNOWN;
         if (mNowXYZ[0] > POSITION_IN_BORDER) {
             newPosition = POSITION_RIGHT_UP;
@@ -88,8 +105,21 @@ public class ExtensionMotion {
             newPosition = POSITION_BOTTOM_UP;
         } else if (mNowXYZ[2] > POSITION_IN_BORDER) {
             newPosition = POSITION_FRONT_UP;
+            if (mSeikenStartTime > 0) {
+                long now = System.currentTimeMillis();
+                if (MAX_SEIKEN_TIME_MS < (mSeikenStartTime - now)) {
+                    mSeikenStartTime = 0;
+                }
+                if (mListener != null) {
+                    mListener.onSeiken(mMaxX - mMinX);
+                    mSeikenStartTime = 0;
+                }
+            }
         } else if (mNowXYZ[2] < -POSITION_IN_BORDER) {
             newPosition = POSITION_BACK_UP;
+            mMinX = 0.0f;
+            mMaxX = 0.0f;
+            mSeikenStartTime = System.currentTimeMillis();
         }
 
         if (!POSITION_UNKNOWN.equals(newPosition) && !mPosition.equals(newPosition)) {

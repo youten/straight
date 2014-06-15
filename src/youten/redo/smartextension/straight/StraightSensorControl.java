@@ -41,6 +41,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Typeface;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
@@ -77,6 +78,7 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
     private int mCurrentSensor = 0;
     private int mCount = 0;
     private String mPosition = ExtensionMotion.POSITION_UNKNOWN;
+    private float mSeikenScore = 0;
 
     private ExtensionMotion mExtensionMotion = new ExtensionMotion(this);
 
@@ -99,10 +101,15 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
     public void onPositionChanged(String fromPosition, String toPosition) {
         Log.d(StraightExtensionService.LOG_TAG, "Position " + fromPosition + " -> " + toPosition);
         mPosition = toPosition;
+        if (toPosition != ExtensionMotion.POSITION_FRONT_UP) {
+            mSeikenScore = 0;
+        }
     };
 
     public void onSeiken(float score) {
-
+        Log.d(StraightExtensionService.LOG_TAG,
+                "New Seiken Score=" + String.format("%.3f", score));
+        mSeikenScore = score;
     };
 
     /**
@@ -277,12 +284,49 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
 
     private void updateCurrentDisplay(AccessorySensorEvent sensorEvent) {
         AccessorySensor sensor = getCurrentSensor();
-        if (sensor.getType().getName().equals(Registration.SensorTypeValue.ACCELEROMETER) ||
+        if (mSeikenScore > 0) {
+            updateSeikenDisplay();
+        } else if (sensor.getType().getName().equals(Registration.SensorTypeValue.ACCELEROMETER) ||
                 sensor.getType().getName().equals(Registration.SensorTypeValue.MAGNETIC_FIELD)) {
             updateGenericSensorDisplay(sensorEvent, sensor.getType().getName());
         } else {
             updateLightSensorDisplay(sensorEvent);
         }
+    }
+
+    /**
+     * Update the display Seiken Score
+     */
+    private void updateSeikenDisplay() {
+        // Create bitmap to draw in.
+        Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, BITMAP_CONFIG);
+
+        // Set default density to avoid scaling.
+        bitmap.setDensity(DisplayMetrics.DENSITY_DEFAULT);
+
+        LinearLayout root = new LinearLayout(mContext);
+        root.setLayoutParams(new ViewGroup.LayoutParams(mWidth, mHeight));
+        root.setGravity(Gravity.CENTER);
+
+        LayoutInflater inflater = (LayoutInflater) mContext
+                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        LinearLayout sampleLayout = (LinearLayout) inflater.inflate(R.layout.seiken_score,
+                root, true);
+
+        TextView seikenTitle = (TextView) sampleLayout.findViewById(R.id.seiken_title);
+        seikenTitle.setTypeface(null, Typeface.BOLD);
+
+        TextView seikenScore = (TextView) sampleLayout.findViewById(R.id.seiken_score);
+        seikenScore.setTypeface(null, Typeface.BOLD);
+        seikenScore.setText(String.format("%.2f", mSeikenScore));
+
+        root.measure(mWidth, mHeight);
+        root.layout(0, 0, mWidth, mHeight);
+
+        Canvas canvas = new Canvas(bitmap);
+        sampleLayout.draw(canvas);
+
+        showBitmap(bitmap);
     }
 
     /**
