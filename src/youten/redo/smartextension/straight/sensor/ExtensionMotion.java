@@ -4,22 +4,31 @@ package youten.redo.smartextension.straight.sensor;
 import com.sonyericsson.extras.liveware.extension.util.sensor.AccessorySensorEvent;
 
 public class ExtensionMotion {
-    public static final String POSITION_FRONT_UP = "position_front_up"; // 腕時計上面が上を向いている
-    public static final String POSITION_BACK_UP = "position_back_up"; // 腕時計背面が上を向いている
-    public static final String POSITION_RIGHT_UP = "position_right_up"; // 右側面が上を向いている
-    public static final String POSITION_LEFT_UP = "position_left_up"; // 左側面が上を向いている
-    public static final String POSITION_BOTTOM_UP = "position_bottom_up"; // 下部側面が上を向いている
-    public static final String POSITION_TOP_UP = "position_top_up"; // 上部側面が上を向いている
-    public static final String POSITION_UNKNOWN = "position_unknown"; // どの状態でもない
+    public static final String POSITION_FRONT_UP = "FRONT"; // 腕時計上面が上を向いている
+    public static final String POSITION_BACK_UP = "BACK"; // 腕時計背面が上を向いている
+    public static final String POSITION_RIGHT_UP = "RIGHT"; // 右側面が上を向いている
+    public static final String POSITION_LEFT_UP = "LEFT"; // 左側面が上を向いている
+    public static final String POSITION_BOTTOM_UP = "BOTTOM"; // 下部側面が上を向いている
+    public static final String POSITION_TOP_UP = "TOP"; // 上部側面が上を向いている
+    public static final String POSITION_UNKNOWN = "Unknown"; // どの状態でもない
+
+    // Fling:FRONTからRIGHT, LEFT, BOTTOM, TOPに傾けてすぐ戻す操作
+    public static final String FLING_INSIDE = "FLING IN"; // 下部側面を下に向けてすぐ戻す
+    public static final String FLING_OUTSIDE = "FLING OUT"; // 上部側面を下に向けてすぐ戻す
+    public static final String FLING_LEFT = "FLING LEFT"; // 左側面を下に向けてすぐ戻す
+    public static final String FLING_RIGHT = "FLING RIGHT"; // 右側面を下に向けてすぐ戻す
+    public static final String NO_FLING = "NO FLING"; // どのFling操作でもない
 
     public interface MotionListener {
         public void onPositionChanged(String fromPosition, String toPosition);
 
         public void onSeiken(float score);
+
+        public void onFling(String fling);
     };
 
     // xyzの絶対値のいずれかの絶対値がこの値を超えている
-    private static final float POSITION_IN_BORDER = 8.0f;
+    private static final float POSITION_IN_BORDER = 7.0f;
     // xyzの絶対値の合計値がこの値を下回ったら（落下方向に）に移動中
     private static final float MOVEMENT_SUM_MIN = 8.0f;
     // xyzの絶対値の合計値がこの値を上回ったら（他の向きに）に移動中
@@ -27,6 +36,10 @@ public class ExtensionMotion {
     private float[] mNowXYZ = new float[3];
     private String mPosition = POSITION_UNKNOWN;
     private MotionListener mListener = null;
+
+    // fling用前回RIGHT, LEFT, BOTTOM, TOPになった時刻
+    private static final long FLING_TIME_MAX = 1000; // 1000ms以内の操作であればFlingと判定
+    private long mLastPreFlingTime = 0;
 
     // SEIKENスコア用X軸最低/最大スコア
     private float mMinX = 0.0f;
@@ -125,6 +138,34 @@ public class ExtensionMotion {
         if (!POSITION_UNKNOWN.equals(newPosition) && !mPosition.equals(newPosition)) {
             if (mListener != null) {
                 mListener.onPositionChanged(mPosition, newPosition);
+
+                if (mLastPreFlingTime > 0) {
+                    // RLTB -> FRONT && FLING_TIME_MAX ms以内
+                    long now = System.currentTimeMillis();
+                    if (newPosition.equals(POSITION_FRONT_UP)
+                            && (now - mLastPreFlingTime < FLING_TIME_MAX)) {
+                        if (mPosition.equals(POSITION_RIGHT_UP)) {
+                            mListener.onFling(FLING_LEFT);
+                        } else if (mPosition.equals(POSITION_LEFT_UP)) {
+                            mListener.onFling(FLING_RIGHT);
+                        } else if (mPosition.equals(POSITION_TOP_UP)) {
+                            mListener.onFling(FLING_INSIDE);
+                        } else if (mPosition.equals(POSITION_BOTTOM_UP)) {
+                            mListener.onFling(FLING_OUTSIDE);
+                        }
+                    }
+                    mLastPreFlingTime = 0;
+                } else {
+                    // FRONT -> RLTB
+                    if (mPosition.equals(POSITION_FRONT_UP)) {
+                        if (newPosition.equals(POSITION_RIGHT_UP)
+                                || newPosition.equals(POSITION_LEFT_UP)
+                                || newPosition.equals(POSITION_TOP_UP)
+                                || newPosition.equals(POSITION_BOTTOM_UP)) {
+                            mLastPreFlingTime = System.currentTimeMillis();
+                        }
+                    }
+                }
             }
             mPosition = newPosition;
         }

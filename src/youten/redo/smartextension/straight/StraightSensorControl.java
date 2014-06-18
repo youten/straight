@@ -47,12 +47,11 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
-import android.view.ViewGroup.LayoutParams;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sonyericsson.extras.liveware.aef.control.Control;
-import com.sonyericsson.extras.liveware.aef.registration.Registration;
 import com.sonyericsson.extras.liveware.aef.registration.Registration.SensorTypeValue;
 import com.sonyericsson.extras.liveware.aef.sensor.Sensor;
 import com.sonyericsson.extras.liveware.aef.sensor.Sensor.SensorAccuracy;
@@ -90,10 +89,10 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         public void onSensorEvent(AccessorySensorEvent sensorEvent) {
             // Log.d(StraightExtensionService.LOG_TAG, "Listener: OnSensorEvent");
             mExtensionMotion.pushEvent(sensorEvent);
-            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので5回に1回だけ書く
-            if ((mCount++) % 5 == 0) {
-                updateCurrentDisplay(sensorEvent);
-            }
+//            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので5回に1回だけ書く
+//            if ((mCount++) % 5 == 0) {
+//                updateCurrentDisplay(sensorEvent);
+//            }
         }
 
     };
@@ -104,12 +103,20 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         if (toPosition != ExtensionMotion.POSITION_FRONT_UP) {
             mSeikenScore = 0;
         }
+        updateCurrentDisplay(null);
     };
+
+    @Override
+    public void onFling(String fling) {
+        Log.d(StraightExtensionService.LOG_TAG, "Fling " + fling);
+
+    }
 
     public void onSeiken(float score) {
         Log.d(StraightExtensionService.LOG_TAG,
                 "New Seiken Score=" + String.format("%.3f", score));
         mSeikenScore = score;
+        updateCurrentDisplay(null);
     };
 
     /**
@@ -202,7 +209,8 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
     public void onTouch(ControlTouchEvent event) {
         super.onTouch(event);
         if (event.getAction() == Control.Intents.TOUCH_ACTION_RELEASE) {
-            toggleSensor();
+            mSeikenScore = 0;
+            updateCurrentDisplay(null);
         }
     }
 
@@ -259,38 +267,11 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         mSensors = null;
     }
 
-    private void toggleSensor() {
-        // Unregister the current sensor.
-        unregister();
-
-        // Toggle type
-        nextSensor();
-
-        // Register new sensor.
-        register();
-
-        // Update display
-        updateCurrentDisplay(null);
-    }
-
-    private void nextSensor() {
-        if (mCurrentSensor == (mSensors.size() - 1)) {
-            mCurrentSensor = 0;
-        }
-        else {
-            mCurrentSensor++;
-        }
-    }
-
     private void updateCurrentDisplay(AccessorySensorEvent sensorEvent) {
-        AccessorySensor sensor = getCurrentSensor();
         if (mSeikenScore > 0) {
             updateSeikenDisplay();
-        } else if (sensor.getType().getName().equals(Registration.SensorTypeValue.ACCELEROMETER) ||
-                sensor.getType().getName().equals(Registration.SensorTypeValue.MAGNETIC_FIELD)) {
-            updateGenericSensorDisplay(sensorEvent, sensor.getType().getName());
         } else {
-            updateLightSensorDisplay(sensorEvent);
+            updateDirectionDisplay();
         }
     }
 
@@ -330,11 +311,9 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
     }
 
     /**
-     * Update the display with new accelerometer data.
-     * 
-     * @param sensorEvent The sensor event.
+     * Update the display Seiken Score
      */
-    private void updateGenericSensorDisplay(AccessorySensorEvent sensorEvent, String sensorType) {
+    private void updateDirectionDisplay() {
         // Create bitmap to draw in.
         Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, BITMAP_CONFIG);
 
@@ -347,39 +326,31 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
 
         LayoutInflater inflater = (LayoutInflater) mContext
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        LinearLayout sampleLayout = (LinearLayout) inflater.inflate(R.layout.generic_sensor_values,
+        LinearLayout sampleLayout = (LinearLayout) inflater.inflate(R.layout.direction,
                 root, true);
 
-        TextView title = (TextView) sampleLayout.findViewById(R.id.sensor_title);
-        title.setText(sensorType);
+        TextView label = (TextView) sampleLayout.findViewById(R.id.direction_label);
+        label.setTypeface(null, Typeface.BOLD);
+        label.setText(mPosition);
 
-        TextView position = (TextView) sampleLayout.findViewById(R.id.position);
-        position.setText(mPosition);
-
-        // Update the values.
-        if (sensorEvent != null) {
-            float[] values = sensorEvent.getSensorValues();
-
-            if (values != null && values.length == 3) {
-                TextView xView = (TextView) sampleLayout.findViewById(R.id.sensor_value_x);
-                TextView yView = (TextView) sampleLayout.findViewById(R.id.sensor_value_y);
-                TextView zView = (TextView) sampleLayout.findViewById(R.id.sensor_value_z);
-
-                // Show values with one decimal.
-                xView.setText(String.format("%.1f", values[0]));
-                yView.setText(String.format("%.1f", values[1]));
-                zView.setText(String.format("%.1f", values[2]));
-            }
-
-            // Show time stamp in milliseconds. (Reading is in nanoseconds.)
-            TextView timeStampView = (TextView) sampleLayout
-                    .findViewById(R.id.sensor_value_timestamp);
-            timeStampView.setText(String.format("%d", (long) (sensorEvent.getTimestamp() / 1e9)));
-
-            // Show sensor accuracy.
-            TextView accuracyView = (TextView) sampleLayout
-                    .findViewById(R.id.sensor_value_accuracy);
-            accuracyView.setText(getAccuracyText(sensorEvent.getAccuracy()));
+        ImageView icon = (ImageView) sampleLayout.findViewById(R.id.direction_icon);
+        if (ExtensionMotion.POSITION_FRONT_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.punch);
+        } else if (ExtensionMotion.POSITION_BACK_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.iconmonstr_circle_dashed8);
+        } else if (ExtensionMotion.POSITION_LEFT_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.iconmonstr_arrow4);
+            icon.setRotation(180);
+        } else if (ExtensionMotion.POSITION_RIGHT_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.iconmonstr_arrow4);
+        } else if (ExtensionMotion.POSITION_BOTTOM_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.iconmonstr_arrow4);
+            icon.setRotation(90);
+        } else if (ExtensionMotion.POSITION_TOP_UP.equals(mPosition)) {
+            icon.setImageResource(R.drawable.iconmonstr_arrow4);
+            icon.setRotation(270);
+        } else {
+            icon.setImageResource(R.drawable.punch);
         }
 
         root.measure(mWidth, mHeight);
@@ -391,55 +362,67 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         showBitmap(bitmap);
     }
 
-    /**
-     * Update the display with new light sensor data.
-     * 
-     * @param sensorEvent The sensor event.
-     */
-    private void updateLightSensorDisplay(AccessorySensorEvent sensorEvent) {
-        // Create bitmap to draw in.
-        Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, BITMAP_CONFIG);
-
-        // Set default density to avoid scaling.
-        bitmap.setDensity(DisplayMetrics.DENSITY_DEFAULT);
-
-        LinearLayout root = new LinearLayout(mContext);
-        root.setLayoutParams(new LayoutParams(mWidth, mHeight));
-
-        LinearLayout sampleLayout = (LinearLayout) LinearLayout.inflate(mContext,
-                R.layout.lightsensor_values, root);
-
-        // Update the values.
-        if (sensorEvent != null) {
-            float[] values = sensorEvent.getSensorValues();
-
-            if (values != null && values.length == 1) {
-                TextView xView = (TextView) sampleLayout.findViewById(R.id.light_value);
-
-                // Show values with one decimal.
-                xView.setText(String.format("%.1f", values[0]));
-            }
-
-            // Show time stamp in milliseconds. (Reading is in nanoseconds.)
-            TextView timeStampView = (TextView) sampleLayout
-                    .findViewById(R.id.light_value_timestamp);
-            timeStampView.setText(String.format("%d", (long) (sensorEvent.getTimestamp() / 1e9)));
-
-            // Show sensor accuracy.
-            TextView accuracyView = (TextView) sampleLayout
-                    .findViewById(R.id.light_value_accuracy);
-            accuracyView.setText(getAccuracyText(sensorEvent.getAccuracy()));
-        }
-
-        sampleLayout.measure(mWidth, mHeight);
-        sampleLayout
-                .layout(0, 0, sampleLayout.getMeasuredWidth(), sampleLayout.getMeasuredHeight());
-
-        Canvas canvas = new Canvas(bitmap);
-        sampleLayout.draw(canvas);
-
-        showBitmap(bitmap);
-    }
+    //    /**
+    //     * Update the display with new accelerometer data.
+    //     * 
+    //     * @param sensorEvent The sensor event.
+    //     */
+    //    private void updateGenericSensorDisplay(AccessorySensorEvent sensorEvent, String sensorType) {
+    //        // Create bitmap to draw in.
+    //        Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, BITMAP_CONFIG);
+    //
+    //        // Set default density to avoid scaling.
+    //        bitmap.setDensity(DisplayMetrics.DENSITY_DEFAULT);
+    //
+    //        LinearLayout root = new LinearLayout(mContext);
+    //        root.setLayoutParams(new ViewGroup.LayoutParams(mWidth, mHeight));
+    //        root.setGravity(Gravity.CENTER);
+    //
+    //        LayoutInflater inflater = (LayoutInflater) mContext
+    //                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+    //        LinearLayout sampleLayout = (LinearLayout) inflater.inflate(R.layout.generic_sensor_values,
+    //                root, true);
+    //
+    //        TextView title = (TextView) sampleLayout.findViewById(R.id.sensor_title);
+    //        title.setText(sensorType);
+    //
+    //        TextView position = (TextView) sampleLayout.findViewById(R.id.position);
+    //        position.setText(mPosition);
+    //
+    //        // Update the values.
+    //        if (sensorEvent != null) {
+    //            float[] values = sensorEvent.getSensorValues();
+    //
+    //            if (values != null && values.length == 3) {
+    //                TextView xView = (TextView) sampleLayout.findViewById(R.id.sensor_value_x);
+    //                TextView yView = (TextView) sampleLayout.findViewById(R.id.sensor_value_y);
+    //                TextView zView = (TextView) sampleLayout.findViewById(R.id.sensor_value_z);
+    //
+    //                // Show values with one decimal.
+    //                xView.setText(String.format("%.1f", values[0]));
+    //                yView.setText(String.format("%.1f", values[1]));
+    //                zView.setText(String.format("%.1f", values[2]));
+    //            }
+    //
+    //            // Show time stamp in milliseconds. (Reading is in nanoseconds.)
+    //            TextView timeStampView = (TextView) sampleLayout
+    //                    .findViewById(R.id.sensor_value_timestamp);
+    //            timeStampView.setText(String.format("%d", (long) (sensorEvent.getTimestamp() / 1e9)));
+    //
+    //            // Show sensor accuracy.
+    //            TextView accuracyView = (TextView) sampleLayout
+    //                    .findViewById(R.id.sensor_value_accuracy);
+    //            accuracyView.setText(getAccuracyText(sensorEvent.getAccuracy()));
+    //        }
+    //
+    //        root.measure(mWidth, mHeight);
+    //        root.layout(0, 0, mWidth, mHeight);
+    //
+    //        Canvas canvas = new Canvas(bitmap);
+    //        sampleLayout.draw(canvas);
+    //
+    //        showBitmap(bitmap);
+    //    }
 
     /**
      * Convert an accuracy value to a text.
