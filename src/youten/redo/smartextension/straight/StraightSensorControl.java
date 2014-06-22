@@ -37,7 +37,6 @@ import java.util.List;
 
 import youten.redo.smartextension.straight.sensor.ExtensionMotion;
 import youten.redo.smartextension.straight.sensor.ExtensionMotion.MotionListener;
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -54,7 +53,6 @@ import android.widget.TextView;
 import com.sonyericsson.extras.liveware.aef.control.Control;
 import com.sonyericsson.extras.liveware.aef.registration.Registration.SensorTypeValue;
 import com.sonyericsson.extras.liveware.aef.sensor.Sensor;
-import com.sonyericsson.extras.liveware.aef.sensor.Sensor.SensorAccuracy;
 import com.sonyericsson.extras.liveware.extension.util.control.ControlExtension;
 import com.sonyericsson.extras.liveware.extension.util.control.ControlTouchEvent;
 import com.sonyericsson.extras.liveware.extension.util.registration.DeviceInfoHelper;
@@ -89,14 +87,10 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         public void onSensorEvent(AccessorySensorEvent sensorEvent) {
             // Log.d(StraightExtensionService.LOG_TAG, "Listener: OnSensorEvent");
             mExtensionMotion.pushEvent(sensorEvent);
-//            // どうもセンサの周波数が高すぎて描画が蓄積遅延する模様なので5回に1回だけ書く
-//            if ((mCount++) % 5 == 0) {
-//                updateCurrentDisplay(sensorEvent);
-//            }
         }
-
     };
 
+    @Override
     public void onPositionChanged(String fromPosition, String toPosition) {
         Log.d(StraightExtensionService.LOG_TAG, "Position " + fromPosition + " -> " + toPosition);
         mPosition = toPosition;
@@ -109,14 +103,20 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
     @Override
     public void onFling(String fling) {
         Log.d(StraightExtensionService.LOG_TAG, "Fling " + fling);
-
     }
 
+    @Override
     public void onSeiken(float score) {
         Log.d(StraightExtensionService.LOG_TAG,
-                "New Seiken Score=" + String.format("%.3f", score));
+                "New Seiken Score=" + String.format("%.2f", score));
+        Notify.notify(mContext, "SEIKEN", "Score:" + String.format("%.2f", score));
         mSeikenScore = score;
         updateCurrentDisplay(null);
+    };
+
+    @Override
+    public void onJump() {
+        Log.d(StraightExtensionService.LOG_TAG, "Jump!");
     };
 
     /**
@@ -360,90 +360,5 @@ class StraightSensorControl extends ControlExtension implements MotionListener {
         sampleLayout.draw(canvas);
 
         showBitmap(bitmap);
-    }
-
-    //    /**
-    //     * Update the display with new accelerometer data.
-    //     * 
-    //     * @param sensorEvent The sensor event.
-    //     */
-    //    private void updateGenericSensorDisplay(AccessorySensorEvent sensorEvent, String sensorType) {
-    //        // Create bitmap to draw in.
-    //        Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, BITMAP_CONFIG);
-    //
-    //        // Set default density to avoid scaling.
-    //        bitmap.setDensity(DisplayMetrics.DENSITY_DEFAULT);
-    //
-    //        LinearLayout root = new LinearLayout(mContext);
-    //        root.setLayoutParams(new ViewGroup.LayoutParams(mWidth, mHeight));
-    //        root.setGravity(Gravity.CENTER);
-    //
-    //        LayoutInflater inflater = (LayoutInflater) mContext
-    //                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-    //        LinearLayout sampleLayout = (LinearLayout) inflater.inflate(R.layout.generic_sensor_values,
-    //                root, true);
-    //
-    //        TextView title = (TextView) sampleLayout.findViewById(R.id.sensor_title);
-    //        title.setText(sensorType);
-    //
-    //        TextView position = (TextView) sampleLayout.findViewById(R.id.position);
-    //        position.setText(mPosition);
-    //
-    //        // Update the values.
-    //        if (sensorEvent != null) {
-    //            float[] values = sensorEvent.getSensorValues();
-    //
-    //            if (values != null && values.length == 3) {
-    //                TextView xView = (TextView) sampleLayout.findViewById(R.id.sensor_value_x);
-    //                TextView yView = (TextView) sampleLayout.findViewById(R.id.sensor_value_y);
-    //                TextView zView = (TextView) sampleLayout.findViewById(R.id.sensor_value_z);
-    //
-    //                // Show values with one decimal.
-    //                xView.setText(String.format("%.1f", values[0]));
-    //                yView.setText(String.format("%.1f", values[1]));
-    //                zView.setText(String.format("%.1f", values[2]));
-    //            }
-    //
-    //            // Show time stamp in milliseconds. (Reading is in nanoseconds.)
-    //            TextView timeStampView = (TextView) sampleLayout
-    //                    .findViewById(R.id.sensor_value_timestamp);
-    //            timeStampView.setText(String.format("%d", (long) (sensorEvent.getTimestamp() / 1e9)));
-    //
-    //            // Show sensor accuracy.
-    //            TextView accuracyView = (TextView) sampleLayout
-    //                    .findViewById(R.id.sensor_value_accuracy);
-    //            accuracyView.setText(getAccuracyText(sensorEvent.getAccuracy()));
-    //        }
-    //
-    //        root.measure(mWidth, mHeight);
-    //        root.layout(0, 0, mWidth, mHeight);
-    //
-    //        Canvas canvas = new Canvas(bitmap);
-    //        sampleLayout.draw(canvas);
-    //
-    //        showBitmap(bitmap);
-    //    }
-
-    /**
-     * Convert an accuracy value to a text.
-     * 
-     * @param accuracy The accuracy value.
-     * @return The text.
-     */
-    @SuppressLint("DefaultLocale")
-    private String getAccuracyText(int accuracy) {
-
-        switch (accuracy) {
-            case SensorAccuracy.SENSOR_STATUS_UNRELIABLE:
-                return mContext.getString(R.string.accuracy_unreliable);
-            case SensorAccuracy.SENSOR_STATUS_ACCURACY_LOW:
-                return mContext.getString(R.string.accuracy_low);
-            case SensorAccuracy.SENSOR_STATUS_ACCURACY_MEDIUM:
-                return mContext.getString(R.string.accuracy_medium);
-            case SensorAccuracy.SENSOR_STATUS_ACCURACY_HIGH:
-                return mContext.getString(R.string.accuracy_high);
-            default:
-                return String.format("%d", accuracy);
-        }
     }
 }

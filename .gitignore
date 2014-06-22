@@ -1,5 +1,8 @@
+# for Mac
+.DS_Store
 # for Android, Eclipse
 bin/*
 gen/*
 local.properties
 .classpath
+

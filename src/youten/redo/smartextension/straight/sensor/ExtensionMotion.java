@@ -25,14 +25,12 @@ public class ExtensionMotion {
         public void onSeiken(float score);
 
         public void onFling(String fling);
+
+        public void onJump();
     };
 
     // xyzの絶対値のいずれかの絶対値がこの値を超えている
     private static final float POSITION_IN_BORDER = 7.0f;
-    // xyzの絶対値の合計値がこの値を下回ったら（落下方向に）に移動中
-    private static final float MOVEMENT_SUM_MIN = 8.0f;
-    // xyzの絶対値の合計値がこの値を上回ったら（他の向きに）に移動中
-    private static final float MOVEMENT_SUM_MAX = 11.0f;
     private float[] mNowXYZ = new float[3];
     private String mPosition = POSITION_UNKNOWN;
     private MotionListener mListener = null;
@@ -40,6 +38,19 @@ public class ExtensionMotion {
     // fling用前回RIGHT, LEFT, BOTTOM, TOPになった時刻
     private static final long FLING_TIME_MAX = 1000; // 1000ms以内の操作であればFlingと判定
     private long mLastPreFlingTime = 0;
+
+    // PYONPYON (ジャンプ)
+    // xyzの絶対値の最大値がこの値を下回ったら（落下方向に）に移動中
+    private static final float MOVE_FALLING_MAX = 5.0f;
+    // xyzの絶対値の最大値がこの値を上回ったら（上り方向に）に移動中
+    private static final float MOVE_JUMPING_MIN = 15.0f;
+
+    private static final String MOVE_NONE = "NONE";
+    private static final String MOVE_FALLING = "FALLING";
+    private static final String MOVE_JUMPING = "JUMPING";
+    private String mMoving = MOVE_NONE;
+    private static final long MAX_PYONPYON_TIME_MS = 1000;
+    private long mLastJumpTime = 0;
 
     // SEIKENスコア用X軸最低/最大スコア
     private float mMinX = 0.0f;
@@ -87,10 +98,25 @@ public class ExtensionMotion {
         //        String.format("x=%.1f y=%.1f z=%.1f", mNowXYZ[0], mNowXYZ[1], mNowXYZ[2]));
 
         // 移動判定
-        boolean moving = false;
-        float sum = abs(mNowXYZ[0]) + abs(mNowXYZ[1]) + abs(mNowXYZ[2]);
-        if ((sum < MOVEMENT_SUM_MIN) || (MOVEMENT_SUM_MAX > sum)) {
-            moving = true;
+        float max = Math.max(Math.max(abs(mNowXYZ[0]), abs(mNowXYZ[1])), abs(mNowXYZ[2]));
+        String newMove = MOVE_NONE;
+        if (max < MOVE_JUMPING_MIN) {
+            newMove = MOVE_JUMPING;
+        } else if (max > MOVE_FALLING_MAX) {
+            newMove = MOVE_FALLING;
+        }
+        if (!mMoving.equals(newMove)) {
+            if (MOVE_JUMPING.equals(newMove)) {
+                mLastJumpTime = System.currentTimeMillis();
+            } else if (MOVE_FALLING.equals(newMove)) {
+                long now = System.currentTimeMillis();
+                if (MAX_PYONPYON_TIME_MS < (now - mLastJumpTime)) {
+                    if (mListener != null) {
+                        mListener.onJump();
+                    }
+                }
+                mLastJumpTime = 0;
+            }
         }
 
         // 正拳スコア更新
@@ -102,7 +128,7 @@ public class ExtensionMotion {
                 mMaxX = mNowXYZ[0];
             }
             long now = System.currentTimeMillis();
-            if (MAX_SEIKEN_TIME_MS < (mSeikenStartTime - now)) {
+            if (MAX_SEIKEN_TIME_MS < (now - mSeikenStartTime)) {
                 mSeikenStartTime = 0;
             }
         }
@@ -120,11 +146,10 @@ public class ExtensionMotion {
             newPosition = POSITION_FRONT_UP;
             if (mSeikenStartTime > 0) {
                 long now = System.currentTimeMillis();
-                if (MAX_SEIKEN_TIME_MS < (mSeikenStartTime - now)) {
-                    mSeikenStartTime = 0;
-                }
-                if (mListener != null) {
-                    mListener.onSeiken(mMaxX - mMinX);
+                if (MAX_SEIKEN_TIME_MS > (now - mSeikenStartTime)) {
+                    if (mListener != null) {
+                        mListener.onSeiken(mMaxX - mMinX);
+                    }
                     mSeikenStartTime = 0;
                 }
             }
